@@ -1,38 +1,49 @@
 #include <Arduino.h>
 #include <SPI.h>
-#include <SD.h>
+#include <MFRC522.h>
 
-File myFile;
+// Pines que acabas de conectar
+#define RST_PIN  22   // Pin 22 para el RST
+#define SS_PIN   5    // Pin 5 para el SDA (SS)
 
-// El ESP32 usa el pin 5 por defecto para el CS del bus VSPI.
-// Si tu cableado usa el pin 4 (como dice el ejemplo original), cambia este número a 4.
-const int CS_PIN = 5; 
+MFRC522 mfrc522(SS_PIN, RST_PIN); 
 
 void setup() {
-  Serial.begin(9600);
-  Serial.print("Iniciando SD ...");
+  Serial.begin(9600); 
+  delay(1000); // Pausa de seguridad para que abras el monitor serie
+
+  Serial.println("\n=== INICIANDO PRUEBA AISLADA RFID ===");
+
+  SPI.begin();        
+  mfrc522.PCD_Init(); 
   
-  // Inicializamos la SD con nuestro pin CS
-  if (!SD.begin(CS_PIN)) {
-    Serial.println("No se pudo inicializar");
-    return;
-  }
-  Serial.println("inicializacion exitosa");
- 
-  // En ESP32, es recomendable poner la barra "/" antes del nombre del archivo
-  myFile = SD.open("/archivo.txt"); 
+  // Verificamos si los cables están bien conectados
+  mfrc522.PCD_DumpVersionToSerial(); 
   
-  if (myFile) {
-    Serial.println("archivo.txt:");
-    while (myFile.available()) {
-    	Serial.write(myFile.read());
-    }
-    myFile.close(); //cerramos el archivo
-  } else {
-    Serial.println("Error al abrir el archivo");
-  }
+  // Ponemos la antena al máximo
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);
+  
+  Serial.println("----------------------------------");
+  Serial.println("LISTO. Acerca la tarjeta o el llavero...");
 }
 
 void loop() {
-  // Bucle vacío, la lectura solo se hace una vez al encender la placa
-}
+  // 1. Preguntamos si hay una tarjeta en el lector
+  if (mfrc522.PICC_IsNewCardPresent()) {  
+    
+    // 2. Si hay tarjeta, intentamos leerla
+    if (mfrc522.PICC_ReadCardSerial()) {
+      
+      Serial.print("✅ TARJETA DETECTADA! UID:");
+      
+      for (byte i = 0; i < mfrc522.uid.size; i++) {
+        Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        Serial.print(mfrc522.uid.uidByte[i], HEX);   
+      } 
+      Serial.println();
+      
+      // 3. Pausamos la lectura de esta tarjeta
+      mfrc522.PICC_HaltA();         
+    }      
+  }	
+} 
